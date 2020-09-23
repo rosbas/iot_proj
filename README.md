@@ -2,8 +2,8 @@
 The goal of the project is to create a contactless fan as a mid-term project for class IOT
 
 
-# notes
-Some file names and variables contain strong language due to pent-up frustration stored during the working period. Please proceed with cautions.
+# Notes
+Some file names and variables contain strong language due to pent-up emotion stored during the working period. Please proceed with cautions.
 
 The project is done using 
 - STM32 NUCLEOF411RE
