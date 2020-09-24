@@ -30,24 +30,24 @@ endif
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
-Kuy2.elf \
+ContactLessFan.elf \
 
 SIZE_OUTPUT += \
 default.size.stdout \
 
 OBJDUMP_LIST += \
-Kuy2.list \
+ContactLessFan.list \
 
 OBJCOPY_BIN += \
-Kuy2.bin \
+ContactLessFan.bin \
 
 
 # All Target
-all: Kuy2.elf secondary-outputs
+all: ContactLessFan.elf secondary-outputs
 
 # Tool invocations
-Kuy2.elf: $(OBJS) $(USER_OBJS) C:\Users\panutat\Desktop\iot\Kuy2\STM32F411RETX_FLASH.ld
-	arm-none-eabi-gcc -o "Kuy2.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\panutat\Desktop\iot\Kuy2\STM32F411RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Kuy2.map" -Wl,--gc-sections -static -u_printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+ContactLessFan.elf: $(OBJS) $(USER_OBJS) C:\Users\panutat\Desktop\iot_proj\Kuy2\STM32F411RETX_FLASH.ld
+	arm-none-eabi-gcc -o "ContactLessFan.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\panutat\Desktop\iot_proj\Kuy2\STM32F411RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="ContactLessFan.map" -Wl,--gc-sections -static -u_printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -56,13 +56,13 @@ default.size.stdout: $(EXECUTABLES)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-Kuy2.list: $(EXECUTABLES)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "Kuy2.list"
+ContactLessFan.list: $(EXECUTABLES)
+	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "ContactLessFan.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
-Kuy2.bin: $(EXECUTABLES)
-	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "Kuy2.bin"
+ContactLessFan.bin: $(EXECUTABLES)
+	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "ContactLessFan.bin"
 	@echo 'Finished building: $@'
 	@echo ' '
 
