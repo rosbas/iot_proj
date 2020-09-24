@@ -23,7 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "DHT.h"
-#include "ESP8266_HAL.h"
+//#include "ESP8266_HAL.h"
 #include <string.h>
 #include <stdio.h>
 /* USER CODE END Includes */
@@ -43,9 +43,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 
-UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -55,9 +55,9 @@ UART_HandleTypeDef huart2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_TIM4_Init(void);
-static void MX_USART1_UART_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void usDelay(uint32_t uSec);
 /* USER CODE END PFP */
@@ -67,8 +67,13 @@ void usDelay(uint32_t uSec);
 const float speedOfSound = 0.0343/2;
 float distance;
 float Temperature, Humidity;
+float max_distance, min_distance, min_Temp;
+int time, dutycycle;
+
+
 
 DHT_DataTypedef DHT11_Data;
+int fan_state  = 1;
 char uartBuf[100];
 
 /* USER CODE END 0 */
@@ -101,14 +106,14 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
   MX_TIM4_Init();
-  MX_USART1_UART_Init();
+  MX_TIM2_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
 //  Ringbuf_init();
 
-  ESP_Init("", ""); //input ssid and password.
+//  ESP_Init("", ""); //input ssid and password.
 
 
   /* USER CODE END 2 */
@@ -120,8 +125,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  Server_Start();
-	  HAL_Delay(5000);	//the esp still can't initiate the server yet.
+//	  Server_Start();
+//	  HAL_Delay(5000);	//the esp still can't initiate the server yet.
+//
+	  time = HAL_GetTick() % 5000;
+	  dutycycle = time * 4095 / 5000;
+	  TIM2->CCR1 = dutycycle;
 
 	  DHT_GetData(&DHT11_Data);		//the code from here for DHT and Ultra works fine
 	  Temperature = DHT11_Data.Temperature;
@@ -149,16 +158,57 @@ int main(void)
 	  distance = (numTicks + 0.0f)*2.8*speedOfSound;
 
 	  //5. Print to UART terminal for debugging
-	  sprintf(uartBuf, "Distance (cm)  = %.1f Temperature (C) = %.1f\r\n", distance, Temperature);
+	  sprintf(uartBuf, "Distance (cm)  = %.1f Temperature (C) = %.1f Fan State = %d\r\n", distance, Temperature, fan_state);
 	  HAL_UART_Transmit(&huart2, (uint8_t *)uartBuf, strlen(uartBuf), 100);
 
-	  if(distance <= 60 && distance >=2 && Temperature >= 24){
-		  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
-	  }
-	  else{
-		  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+	  max_distance = 60;
+	  min_distance = 2;
+	  min_Temp = 24;
+
+	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == 0){
+		  HAL_Delay(10);
+		  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == 0){
+			  while(HAL_GPIO_ReadPin(B1_GPIO_Port,B1_Pin) == 0);
+			  HAL_Delay(10);
+			  fan_state = (fan_state + 1) % 4;
+		  }
 	  }
 
+	  if(distance <= 60 && distance >=2 && Temperature >= 24 && fan_state!=0){
+		  HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_1);
+		  if(fan_state == 1){
+//			  TIM2->CCR1 = 500;
+		  }else if(fan_state == 2){
+//			  TIM2->CCR1 = 3000;
+		  }else if(fan_state == 3){
+//			  TIM2->CCR1 = 5000;
+		  }
+	  }
+	  else{
+		  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+	  }
+//
+//	  if(distance <= 60 && distance >=2 && Temperature >= 24){
+//		  switch(fan_state){
+//		  case '1':
+//			  HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_1);
+//			  HAL_TIM_PWM_ConfigChannel(&htim2, 400, TIM_CHANNEL_1);
+//		  case '2':
+//			  HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_1);
+////			  HAL_TIM_PWM_ConfigChannel(&htim2, 200, TIM_CHANNEL_1);
+//		  case '3':
+//			  HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_1);
+////			  Blink(500);
+////			  HAL_TIM_PWM_ConfigChannel(&htim2, 50, TIM_CHANNEL_1);
+//		  default:
+//			  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+//		  }
+//	  }
+//	  else{
+//		  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+//	  }
+//
+//
 	  HAL_Delay(2000); //given it at least 2 sec for it to work.
   }
   /* USER CODE END 3 */
@@ -208,6 +258,65 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 32000;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 1000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
   * @brief TIM4 Initialization Function
   * @param None
   * @retval None
@@ -249,39 +358,6 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
-
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -334,7 +410,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1|LD2_Pin|TRIG_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(state3_GPIO_Port, state3_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1|state2_Pin|LD2_Pin|TRIG_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(state1_GPIO_Port, state1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -342,12 +424,26 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA1 LD2_Pin TRIG_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|LD2_Pin|TRIG_Pin;
+  /*Configure GPIO pin : state3_Pin */
+  GPIO_InitStruct.Pin = state3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(state3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA1 state2_Pin LD2_Pin TRIG_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|state2_Pin|LD2_Pin|TRIG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : state1_Pin */
+  GPIO_InitStruct.Pin = state1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(state1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ECHO_Pin */
   GPIO_InitStruct.Pin = ECHO_Pin;
@@ -367,6 +463,20 @@ void usDelay(uint32_t uSec)
 	usTIM->CR1 |= 1; 		//Enables the counter
 	while((usTIM->SR&0x0001) != 1);
 	usTIM->SR &= ~(0x0001);
+}
+
+void Blink(uint32_t delay){
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+	HAL_Delay(delay);
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+	HAL_Delay(delay);
+}
+
+void Close_all_fan_pin(){
+	HAL_GPIO_WritePin(state1_GPIO_Port, state1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(state2_GPIO_Port, state2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(state3_GPIO_Port, state3_Pin, GPIO_PIN_RESET);
+	HAL_Delay(100);
 }
 /* USER CODE END 4 */
 
